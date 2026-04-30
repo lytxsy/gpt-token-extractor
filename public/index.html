@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GPT Token Extractor</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>GPT Token Extractor</h1>
+      <p class="subtitle">输入 OpenAI 账号凭据，自动提取 Codex OAuth Token</p>
+    </header>
+
+    <div id="login-overlay" class="overlay" hidden>
+      <div class="box">
+        <h2>登录</h2>
+        <form id="login-form">
+          <input type="password" id="login-password" placeholder="管理密码" autocomplete="current-password" autofocus>
+          <button type="submit">登录</button>
+        </form>
+        <div id="login-error" class="error" hidden>密码错误</div>
+      </div>
+    </div>
+
+    <section id="input-section" class="card">
+      <h2>提取 Token</h2>
+      <form id="extract-form">
+        <div class="form-group">
+          <label for="email">OpenAI 邮箱 <span class="required">*</span></label>
+          <input type="email" id="email" placeholder="user@example.com" required>
+        </div>
+        <div class="form-group">
+          <label for="password">密码 <span class="optional">（留空则自动用验证码登录）</span></label>
+          <input type="password" id="password" placeholder="可选，不填则走验证码">
+        </div>
+        <button type="submit" id="submit-btn" class="btn-primary">开始提取</button>
+      </form>
+    </section>
+
+    <section id="progress-section" class="card" hidden>
+      <h2>提取进度</h2>
+      <div class="progress-bar">
+        <div id="progress-fill" class="progress-fill" style="width: 0%"></div>
+      </div>
+      <p id="progress-step">等待开始...</p>
+      <div id="log-container" class="log-container"></div>
+      <button id="stop-btn" class="btn-danger" hidden>取消</button>
+    </section>
+
+    <section id="result-section" class="card" hidden>
+      <h2>提取成功</h2>
+      <div class="result-info">
+        <span id="result-email"></span>
+        <span id="result-account"></span>
+      </div>
+      <div class="result-actions">
+        <button id="copy-json-btn" class="btn-primary">复制 JSON</button>
+        <a id="download-btn" class="btn-secondary" download>下载 JSON</a>
+        <button id="download-all-btn" class="btn-secondary">下载全部 Token</button>
+      </div>
+      <pre id="json-preview" class="json-preview"></pre>
+    </section>
+
+    <section id="history-section" class="card">
+      <h2>提取历史</h2>
+      <div id="history-list" class="history-list">
+        <p class="empty">暂无记录</p>
+      </div>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

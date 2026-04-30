@@ -1,0 +1,13 @@
+{
+  "name": "gpt-token-extractor",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "ws": "^8.18.0",
+    "axios": "^1.7.0"
+  }
+}

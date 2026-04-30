@@ -1,0 +1,14 @@
+services:
+  app:
+    build: .
+    ports:
+      - "127.0.0.1:8090:8090"
+    volumes:
+      - ./tokens:/app/tokens
+      - ./config:/app/config
+    environment:
+      - PORT=8090
+      - ADMIN_PASSWORD=
+      - MAIL_API_BASE=https://temp-email-api.19980519.xyz
+      - MAIL_ADMIN_KEY=199859
+    restart: unless-stopped
