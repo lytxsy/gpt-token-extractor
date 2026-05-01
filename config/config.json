@@ -1,8 +1,7 @@
 {
-  "mailApiBase": "https://temp-email-api.19980519.xyz",
-  "mailAdminKey": "199859",
-  "oauthClientId": "app_EMoamEEZ73f0CkXaXp7hrann",
+  "mailApiBase": "https://your-mail-api.example.com",
+  "mailAdminKey": "your-admin-key",
+  "oauthClientId": "your-oauth-client-id",
   "oauthRedirectPort": 1455,
-  "browserbaseApiUrl": "https://gemini.browserbase.com/api",
-  "agentModel": "google/gemini-3-flash-preview"
+  "autoMailDomains": ["example.com"]
 }

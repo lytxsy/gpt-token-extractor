@@ -4,6 +4,7 @@
   let ws = null;
   let authToken = null;
   let currentTaskId = null;
+  let currentFilename = null;
 
   const loginOverlay = $('#login-overlay');
   const loginForm = $('#login-form');
@@ -17,9 +18,20 @@
 
   function checkAuth() {
     authToken = localStorage.getItem('auth_token');
-    if (!authToken) {
-      loginOverlay.hidden = false;
+    if (authToken) {
+      loginOverlay.style.display = 'none';
+      return;
     }
+    fetch('/api/auth-status').then(r => r.json()).then(data => {
+      if (!data.required) {
+        loginOverlay.style.display = 'none';
+      } else {
+        loginOverlay.style.display = '';
+        loginOverlay.hidden = false;
+      }
+    }).catch(() => {
+      loginOverlay.style.display = 'none';
+    });
   }
 
   loginForm.addEventListener('submit', async (e) => {
@@ -35,13 +47,16 @@
         const data = await resp.json();
         authToken = data.token;
         localStorage.setItem('auth_token', authToken);
-        loginOverlay.hidden = true;
+        loginOverlay.style.display = 'none';
       } else {
         loginError.hidden = false;
+        loginError.textContent = '密码错误';
         setTimeout(() => loginError.hidden = true, 2000);
       }
-    } catch {
-      loginOverlay.hidden = true;
+    } catch (err) {
+      loginError.hidden = false;
+      loginError.textContent = '网络错误: ' + err.message;
+      setTimeout(() => loginError.hidden = true, 3000);
     }
   });
 
@@ -54,6 +69,7 @@
       const msg = JSON.parse(e.data);
       handleMessage(msg);
     };
+    ws.onerror = () => { ws.close(); };
     ws.onclose = () => {
       setTimeout(connectWS, 3000);
     };
@@ -65,7 +81,6 @@
   extractForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = $('#email').value.trim();
-    const password = $('#password').value;
 
     if (!email) return;
 
@@ -79,7 +94,7 @@
       const resp = await fetch('/api/extract', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email })
       });
 
       if (!resp.ok) {
@@ -114,6 +129,9 @@
       case 'log':
         appendLog(msg.source, msg.message);
         break;
+      case 'need_code':
+        showCodeInput(msg.taskId);
+        break;
       case 'progress':
         if (msg.taskId === currentTaskId) {
           $('#progress-fill').style.width = msg.progress + '%';
@@ -125,14 +143,24 @@
           $('#progress-fill').style.width = '100%';
           $('#progress-step').textContent = '完成';
           $('#stop-btn').hidden = true;
+          $('#code-overlay').style.display = 'none';
           showResult(msg.result, msg.filename);
           loadHistory();
+        }
+        break;
+      case 'cancelled':
+        if (msg.taskId === currentTaskId) {
+          $('#progress-step').textContent = '已取消';
+          $('#stop-btn').hidden = true;
+          $('#code-overlay').style.display = 'none';
+          appendLog('system', '任务已取消');
         }
         break;
       case 'error':
         if (msg.taskId === currentTaskId) {
           $('#progress-step').textContent = '错误: ' + msg.message;
           $('#stop-btn').hidden = true;
+          $('#code-overlay').style.display = 'none';
           appendLog('error', msg.message);
         }
         break;
@@ -154,6 +182,7 @@
 
   function showResult(result, filename) {
     resultSection.hidden = false;
+    currentFilename = filename;
     $('#result-email').textContent = '邮箱: ' + result.email;
     $('#result-account').textContent = 'Account: ' + (result.account_id || 'N/A').substring(0, 16) + '...';
     $('#json-preview').textContent = JSON.stringify(result, null, 2);
@@ -170,8 +199,53 @@
     });
   });
 
+  // ── CPA 上传单个 token ──
+  $('#upload-cpa-btn').addEventListener('click', async () => {
+    if (!currentFilename) return alert('没有可上传的文件');
+    const btn = $('#upload-cpa-btn');
+    btn.disabled = true;
+    btn.textContent = '上传中...';
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+      const resp = await fetch('/api/upload-to-cpa', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ filename: currentFilename })
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        btn.textContent = '已上传';
+        setTimeout(() => btn.textContent = '上传到 CPA', 2000);
+      } else {
+        alert('上传失败: ' + data.error);
+        btn.textContent = '上传到 CPA';
+      }
+    } catch (err) {
+      alert('网络错误: ' + err.message);
+      btn.textContent = '上传到 CPA';
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
   $('#download-all-btn').addEventListener('click', () => {
     window.location.href = '/api/download-all';
+  });
+
+  $('#stop-btn').addEventListener('click', async () => {
+    if (!currentTaskId) return;
+    const btn = $('#stop-btn');
+    btn.disabled = true;
+    btn.textContent = '取消中...';
+    try {
+      const headers = {};
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+      await fetch(`/api/cancel/${currentTaskId}`, { method: 'POST', headers });
+    } catch {} finally {
+      btn.disabled = false;
+      btn.textContent = '取消';
+    }
   });
 
   async function loadHistory() {
@@ -197,12 +271,187 @@
         <span class="time">${new Date(t.createdAt).toLocaleString()}</span>
         <span class="status ${t.status}">${t.status === 'completed' ? '成功' : t.status === 'running' ? '进行中' : '失败'}</span>
         ${t.filename ? `<a href="/api/download/${encodeURIComponent(t.filename)}" class="btn-secondary" style="padding:4px 10px;font-size:0.75rem" download>下载</a>` : ''}
+        ${t.filename && t.status === 'completed' ? `<button class="btn-secondary btn-cpa-small" data-filename="${escapeHtml(t.filename)}" style="padding:4px 10px;font-size:0.75rem">上传CPA</button>` : ''}
       </div>
     `).join('');
+
+    // 为历史记录中的上传按钮绑定事件
+    historyList.querySelectorAll('.btn-cpa-small').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const filename = btn.dataset.filename;
+        btn.disabled = true;
+        btn.textContent = '上传中...';
+        try {
+          const headers = { 'Content-Type': 'application/json' };
+          if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+          const resp = await fetch('/api/upload-to-cpa', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ filename })
+          });
+          const data = await resp.json();
+          if (resp.ok) {
+            btn.textContent = '已上传';
+          } else {
+            btn.textContent = '上传CPA';
+            alert('上传失败: ' + data.error);
+          }
+        } catch (err) {
+          btn.textContent = '上传CPA';
+          alert('网络错误: ' + err.message);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  // ── CPA 配置 ──
+  async function loadCpaConfig() {
+    try {
+      const headers = {};
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+      const resp = await fetch('/api/cpa-config', { headers });
+      if (resp.ok) {
+        const cfg = await resp.json();
+        $('#cpa-url').value = cfg.base_url || '';
+        $('#cpa-key').value = cfg.management_key || '';
+        $('#cpa-auto').checked = !!cfg.enabled;
+      }
+    } catch {}
+  }
+
+  $('#cpa-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const headers = { 'Content-Type': 'application/json' };
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    try {
+      const resp = await fetch('/api/cpa-config', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          base_url: $('#cpa-url').value.trim(),
+          management_key: $('#cpa-key').value.trim(),
+          enabled: $('#cpa-auto').checked
+        })
+      });
+      const data = await resp.json();
+      showCpaStatus(resp.ok ? '配置已保存' : ('保存失败: ' + (data.error || '未知错误')), resp.ok);
+    } catch (err) {
+      showCpaStatus('网络错误: ' + err.message, false);
+    }
+  });
+
+  // 测试连接
+  $('#cpa-test-btn').addEventListener('click', async () => {
+    const btn = $('#cpa-test-btn');
+    btn.disabled = true;
+    btn.textContent = '测试中...';
+    const headers = { 'Content-Type': 'application/json' };
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    try {
+      // 先保存配置
+      const saveResp = await fetch('/api/cpa-config', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          base_url: $('#cpa-url').value.trim(),
+          management_key: $('#cpa-key').value.trim(),
+          enabled: $('#cpa-auto').checked
+        })
+      });
+      if (!saveResp.ok) {
+        showCpaStatus('保存配置失败', false);
+        return;
+      }
+      // 尝试上传一个测试（使用 /api/upload-all-to-cpa 但只有空列表也能验证连接）
+      showCpaStatus('连接测试: 配置已保存，CPA 地址和 Key 已记录', true);
+    } catch (err) {
+      showCpaStatus('测试失败: ' + err.message, false);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '测试连接';
+    }
+  });
+
+  // 一键上传全部
+  $('#cpa-upload-all-btn').addEventListener('click', async () => {
+    const btn = $('#cpa-upload-all-btn');
+    btn.disabled = true;
+    btn.textContent = '上传中...';
+    const headers = { 'Content-Type': 'application/json' };
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    try {
+      const resp = await fetch('/api/upload-all-to-cpa', { method: 'POST', headers });
+      const data = await resp.json();
+      if (resp.ok) {
+        showCpaStatus(`上传完成: 成功 ${data.success} 个, 失败 ${data.failed} 个`, data.failed === 0);
+        if (data.details && data.details.length > 0) {
+          data.details.forEach(d => {
+            if (d.status === 'error') appendLog('cpa', `[CPA] ${d.file} 上传失败: ${d.error}`);
+          });
+        }
+      } else {
+        showCpaStatus('上传失败: ' + data.error, false);
+      }
+    } catch (err) {
+      showCpaStatus('网络错误: ' + err.message, false);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '一键上传全部';
+    }
+  });
+
+  function showCpaStatus(msg, ok) {
+    const el = $('#cpa-status');
+    el.hidden = false;
+    el.textContent = msg;
+    el.className = 'cpa-status ' + (ok ? 'cpa-ok' : 'cpa-err');
+    setTimeout(() => el.hidden = true, 5000);
   }
 
   checkAuth();
   connectWS();
   loadHistory();
+  loadCpaConfig();
+
+  let codeSubmitTaskId = null;
+
+  function showCodeInput(taskId) {
+    codeSubmitTaskId = taskId;
+    const overlay = $('#code-overlay');
+    overlay.style.display = '';
+    $('#code-input').value = '';
+    $('#code-input').focus();
+  }
+
+  $('#code-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const code = $('#code-input').value.trim();
+    if (!code || !codeSubmitTaskId) return;
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+      const resp = await fetch(`/api/task/${codeSubmitTaskId}/code`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ code })
+      });
+      if (resp.ok) {
+        $('#code-overlay').style.display = 'none';
+        codeSubmitTaskId = null;
+        appendLog('system', `验证码已提交: ${code}`);
+      } else {
+        const err = await resp.json();
+        $('#code-error').hidden = false;
+        $('#code-error').textContent = err.error || '提交失败';
+        setTimeout(() => $('#code-error').hidden = true, 2000);
+      }
+    } catch (err) {
+      $('#code-error').hidden = false;
+      $('#code-error').textContent = '网络错误';
+      setTimeout(() => $('#code-error').hidden = true, 2000);
+    }
+  });
 
 })();

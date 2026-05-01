@@ -269,3 +269,63 @@ header h1 {
   font-size: 0.85rem;
   margin-top: 8px;
 }
+
+/* ── CPA 上传 ── */
+.btn-cpa { background: #6366f1; }
+.btn-cpa:hover { background: #4f46e5; }
+.btn-cpa:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.cpa-toggle-row {
+  display: flex;
+  align-items: center;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.toggle-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #6366f1;
+}
+
+.cpa-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cpa-status {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.cpa-status.cpa-ok {
+  background: #10b98122;
+  color: var(--accent);
+  border: 1px solid #10b98144;
+}
+
+.cpa-status.cpa-err {
+  background: #ef444422;
+  color: var(--danger);
+  border: 1px solid #ef444444;
+}
+
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}

@@ -4,6 +4,22 @@ const { WebSocketServer } = require('ws');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+
+// 加载 .env 文件（本地开发/部署用，不会被提交到 Git）
+const envPath = path.join(__dirname, '.env');
+if (fs.existsSync(envPath)) {
+  fs.readFileSync(envPath, 'utf8').split('\n').forEach(line => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) return;
+    const idx = trimmed.indexOf('=');
+    if (idx > 0) {
+      const key = trimmed.substring(0, idx).trim();
+      const val = trimmed.substring(idx + 1).trim();
+      if (!process.env[key]) process.env[key] = val;
+    }
+  });
+}
+
 const { TaskManager } = require('./lib/taskManager');
 
 const app = express();
@@ -20,6 +36,21 @@ config.oauthRedirectPort = parseInt(process.env.OAUTH_REDIRECT_PORT, 10) || conf
 config.mailApiBase = process.env.MAIL_API_BASE || config.mailApiBase;
 config.mailAdminKey = process.env.MAIL_ADMIN_KEY || config.mailAdminKey;
 config.inboxProxyUrl = process.env.INBOX_PROXY_URL || config.inboxProxyUrl || '';
+if (process.env.AUTO_MAIL_DOMAINS) {
+  config.autoMailDomains = process.env.AUTO_MAIL_DOMAINS.split(',').map(s => s.trim()).filter(Boolean);
+} else {
+  config.autoMailDomains = config.autoMailDomains || [];
+}
+
+// ── CPA 上传配置 ──
+const CPA_CONFIG_PATH = path.join(__dirname, 'config', 'cpa.json');
+function loadCpaConfig() {
+  try { return JSON.parse(fs.readFileSync(CPA_CONFIG_PATH, 'utf8')); } catch { return null; }
+}
+function saveCpaConfig(cfg) {
+  if (!fs.existsSync(path.join(__dirname, 'config'))) fs.mkdirSync(path.join(__dirname, 'config'), { recursive: true });
+  fs.writeFileSync(CPA_CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf8');
+}
 
 const taskManager = new TaskManager(config);
 const wsClients = new Set();
@@ -52,17 +83,34 @@ if (adminPassword) {
   });
 }
 
+// 前端需要知道是否需要登录
+app.get('/api/auth-status', (req, res) => {
+  res.json({ required: !!adminPassword });
+});
+
 app.post('/api/extract', async (req, res) => {
-  const { email, password } = req.body;
+  const { email } = req.body;
   if (!email) {
     return res.status(400).json({ error: '邮箱必填' });
   }
-  const taskId = await taskManager.startExtraction(email, password || '', broadcastToClients);
+  const taskId = await taskManager.startExtraction(email, broadcastToClients);
   res.json({ taskId });
 });
 
 app.get('/api/tasks', (req, res) => {
   res.json(taskManager.getAllTasks());
+});
+
+app.post('/api/cancel/:taskId', (req, res) => {
+  const ok = taskManager.cancelTask(req.params.taskId);
+  res.json({ ok });
+});
+
+app.post('/api/task/:taskId/code', (req, res) => {
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ error: '验证码必填' });
+  const ok = taskManager.submitCode(req.params.taskId, code);
+  res.json({ ok });
 });
 
 app.get('/api/task/:taskId', (req, res) => {
@@ -78,7 +126,7 @@ app.get('/api/download/:filename', (req, res) => {
 });
 
 app.get('/api/download-all', (req, res) => {
-  const files = fs.readdirSync(taskManager.outputDir).filter(f => f.startsWith('token_') && f.endsWith('.json'));
+  const files = fs.readdirSync(taskManager.outputDir).filter(f => (f.startsWith('codex-') || f.startsWith('token_')) && f.endsWith('.json'));
   const all = [];
   for (const f of files) {
     try { all.push(JSON.parse(fs.readFileSync(path.join(taskManager.outputDir, f), 'utf8'))); } catch {}
@@ -87,6 +135,143 @@ app.get('/api/download-all', (req, res) => {
   res.setHeader('Content-Disposition', 'attachment; filename="all_tokens.json"');
   res.send(JSON.stringify(all, null, 2));
 });
+
+// ── CPA 配置 CRUD ──
+app.get('/api/cpa-config', (req, res) => {
+  const cfg = loadCpaConfig();
+  res.json(cfg || { base_url: '', management_key: '', enabled: false });
+});
+
+app.post('/api/cpa-config', (req, res) => {
+  const { base_url, management_key, enabled } = req.body;
+  const cfg = {
+    base_url: typeof base_url === 'string' ? base_url.replace(/\/+$/, '') : '',
+    management_key: typeof management_key === 'string' ? management_key : '',
+    enabled: !!enabled,
+  };
+  saveCpaConfig(cfg);
+  res.json({ ok: true, config: cfg });
+});
+
+// ── 上传单个 token 到 CPA ──
+app.post('/api/upload-to-cpa', async (req, res) => {
+  const { filename } = req.body;
+  if (!filename) return res.status(400).json({ error: '缺少文件名' });
+
+  const filepath = path.join(taskManager.outputDir, filename);
+  if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'Token 文件不存在' });
+
+  const cpaConfig = loadCpaConfig();
+  if (!cpaConfig || !cpaConfig.base_url || !cpaConfig.management_key) {
+    return res.status(400).json({ error: '请先配置 CPA 地址和 Management Key' });
+  }
+
+  try {
+    const tokenData = JSON.parse(fs.readFileSync(filepath, 'utf8'));
+    const result = await uploadTokenToCpa(cpaConfig, tokenData, filename);
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── 批量上传所有 token 到 CPA ──
+app.post('/api/upload-all-to-cpa', async (req, res) => {
+  const cpaConfig = loadCpaConfig();
+  if (!cpaConfig || !cpaConfig.base_url || !cpaConfig.management_key) {
+    return res.status(400).json({ error: '请先配置 CPA 地址和 Management Key' });
+  }
+
+  const files = fs.readdirSync(taskManager.outputDir).filter(f => (f.startsWith('codex-') || f.startsWith('token_')) && f.endsWith('.json'));
+  const results = { success: 0, failed: 0, details: [] };
+
+  for (const f of files) {
+    try {
+      const tokenData = JSON.parse(fs.readFileSync(path.join(taskManager.outputDir, f), 'utf8'));
+      await uploadTokenToCpa(cpaConfig, tokenData, f);
+      results.success++;
+      results.details.push({ file: f, status: 'ok' });
+    } catch (err) {
+      results.failed++;
+      results.details.push({ file: f, status: 'error', error: err.message });
+    }
+  }
+  res.json({ ok: true, ...results });
+});
+
+// ── 提取完成后自动上传 ──
+async function autoUploadToCpa(filename) {
+  const cpaConfig = loadCpaConfig();
+  if (!cpaConfig || !cpaConfig.enabled || !cpaConfig.base_url || !cpaConfig.management_key) return;
+
+  const filepath = path.join(taskManager.outputDir, filename);
+  if (!fs.existsSync(filepath)) return;
+
+  try {
+    const tokenData = JSON.parse(fs.readFileSync(filepath, 'utf8'));
+    await uploadTokenToCpa(cpaConfig, tokenData, filename);
+    broadcastToClients({ type: 'log', source: 'cpa', message: `[CPA] ${filename} 自动上传成功` });
+  } catch (err) {
+    broadcastToClients({ type: 'log', source: 'cpa', message: `[CPA] 自动上传失败: ${err.message}` });
+  }
+}
+
+// ── CPA 上传核心逻辑 ──
+async function uploadTokenToCpa(cpaConfig, tokenData, filename) {
+  const http = require('http');
+  const https = require('https');
+  const { URL } = require('url');
+
+  const baseUrl = cpaConfig.base_url.replace(/\/+$/, '');
+  const uploadUrl = `${baseUrl}/v0/management/auth-files?name=${encodeURIComponent(path.basename(filename))}`;
+  const parsed = new URL(uploadUrl);
+
+  const boundary = '----FormBoundary' + crypto.randomBytes(16).toString('hex');
+  const fileContent = JSON.stringify(tokenData, null, 2);
+
+  // 构建 multipart/form-data body
+  const parts = [];
+  // file field
+  parts.push(
+    `--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="file"; filename="${path.basename(filename)}"\r\n` +
+    `Content-Type: application/json\r\n\r\n` +
+    `${fileContent}\r\n`
+  );
+  // end boundary
+  parts.push(`--${boundary}--\r\n`);
+  const body = parts.join('');
+
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: parsed.hostname,
+      port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+      path: parsed.pathname + parsed.search,
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${cpaConfig.management_key}`,
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        'Content-Length': Buffer.byteLength(body),
+      },
+    };
+
+    const transport = parsed.protocol === 'https:' ? https : http;
+    const req = transport.request(options, (resp) => {
+      let data = '';
+      resp.on('data', chunk => data += chunk);
+      resp.on('end', () => {
+        if (resp.statusCode >= 200 && resp.statusCode < 300) {
+          resolve({ status: resp.statusCode, body: data });
+        } else {
+          reject(new Error(`CPA 返回 ${resp.statusCode}: ${data}`));
+        }
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
 
 wss.on('connection', (ws) => {
   wsClients.add(ws);

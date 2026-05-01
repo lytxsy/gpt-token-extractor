@@ -24,16 +24,24 @@
       </div>
     </div>
 
+    <div id="code-overlay" class="overlay" style="display:none">
+      <div class="box">
+        <h2>输入验证码</h2>
+        <p style="color:#999;font-size:0.85rem;margin-bottom:12px">验证码已发送到邮箱，请查收</p>
+        <form id="code-form">
+          <input type="text" id="code-input" placeholder="请输入6位验证码" maxlength="6" autocomplete="off" autofocus>
+          <button type="submit">提交</button>
+        </form>
+        <div id="code-error" class="error" hidden>提交失败</div>
+      </div>
+    </div>
+
     <section id="input-section" class="card">
       <h2>提取 Token</h2>
       <form id="extract-form">
         <div class="form-group">
           <label for="email">OpenAI 邮箱 <span class="required">*</span></label>
           <input type="email" id="email" placeholder="user@example.com" required>
-        </div>
-        <div class="form-group">
-          <label for="password">密码 <span class="optional">（留空则自动用验证码登录）</span></label>
-          <input type="password" id="password" placeholder="可选，不填则走验证码">
         </div>
         <button type="submit" id="submit-btn" class="btn-primary">开始提取</button>
       </form>
@@ -58,6 +66,7 @@
       <div class="result-actions">
         <button id="copy-json-btn" class="btn-primary">复制 JSON</button>
         <a id="download-btn" class="btn-secondary" download>下载 JSON</a>
+        <button id="upload-cpa-btn" class="btn-primary btn-cpa">上传到 CPA</button>
         <button id="download-all-btn" class="btn-secondary">下载全部 Token</button>
       </div>
       <pre id="json-preview" class="json-preview"></pre>
@@ -68,6 +77,32 @@
       <div id="history-list" class="history-list">
         <p class="empty">暂无记录</p>
       </div>
+    </section>
+
+    <section id="cpa-section" class="card">
+      <h2>CPA 上传配置</h2>
+      <form id="cpa-form">
+        <div class="form-group">
+          <label for="cpa-url">CPA 后端地址 <span class="optional">如 https://cpa.example.com</span></label>
+          <input type="url" id="cpa-url" placeholder="https://cpa.example.com">
+        </div>
+        <div class="form-group">
+          <label for="cpa-key">Management Key</label>
+          <input type="text" id="cpa-key" placeholder="Bearer Token / Management Key">
+        </div>
+        <div class="form-group cpa-toggle-row">
+          <label class="toggle-label">
+            <input type="checkbox" id="cpa-auto">
+            <span>提取后自动上传</span>
+          </label>
+        </div>
+        <div class="cpa-actions">
+          <button type="submit" class="btn-primary">保存配置</button>
+          <button type="button" id="cpa-test-btn" class="btn-secondary">测试连接</button>
+          <button type="button" id="cpa-upload-all-btn" class="btn-secondary btn-cpa">一键上传全部</button>
+        </div>
+      </form>
+      <div id="cpa-status" class="cpa-status" hidden></div>
     </section>
   </div>
 
