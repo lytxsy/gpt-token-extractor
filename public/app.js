@@ -244,6 +244,36 @@
     }
   });
 
+  // ── sub2api 上传单个 token ──
+  $('#upload-sub2api-btn').addEventListener('click', async () => {
+    if (!currentFilename) return alert('没有可上传的文件');
+    const btn = $('#upload-sub2api-btn');
+    btn.disabled = true;
+    btn.textContent = '上传中...';
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+      const resp = await fetch('/api/upload-to-sub2api', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ filename: currentFilename })
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        btn.textContent = '已上传';
+        setTimeout(() => btn.textContent = '上传到 sub2api', 2000);
+      } else {
+        alert('上传失败: ' + data.error);
+        btn.textContent = '上传到 sub2api';
+      }
+    } catch (err) {
+      alert('网络错误: ' + err.message);
+      btn.textContent = '上传到 sub2api';
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
   $('#download-all-btn')?.addEventListener('click', () => {
     window.location.href = '/api/download-all';
   });
@@ -309,6 +339,7 @@
         ${t.filename && t.status !== 'deleted' ? `<span class="history-actions">
           <a href="/api/download/${encodeURIComponent(t.filename)}" class="btn-secondary" style="padding:4px 10px;font-size:0.75rem" download>下载</a>
           <button class="btn-secondary btn-cpa-small" data-filename="${escapeHtml(t.filename)}" style="padding:4px 10px;font-size:0.75rem">上传CPA</button>
+          <button class="btn-secondary btn-sub2api-small" data-filename="${escapeHtml(t.filename)}" style="padding:4px 10px;font-size:0.75rem;color:#f59e0b">上传sub2api</button>
           <button class="btn-secondary btn-delete-small" data-filename="${escapeHtml(t.filename)}" style="padding:4px 10px;font-size:0.75rem;color:#ef4444">删除</button>
         </span>` : ''}
       </div>
@@ -337,6 +368,36 @@
           }
         } catch (err) {
           btn.textContent = '上传CPA';
+          alert('网络错误: ' + err.message);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+
+    // 为历史记录中的 sub2api 上传按钮绑定事件
+    historyList.querySelectorAll('.btn-sub2api-small').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const filename = btn.dataset.filename;
+        btn.disabled = true;
+        btn.textContent = '上传中...';
+        try {
+          const headers = { 'Content-Type': 'application/json' };
+          if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+          const resp = await fetch('/api/upload-to-sub2api', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ filename })
+          });
+          const data = await resp.json();
+          if (resp.ok) {
+            btn.textContent = '已上传';
+          } else {
+            btn.textContent = '上传sub2api';
+            alert('上传失败: ' + data.error);
+          }
+        } catch (err) {
+          btn.textContent = '上传sub2api';
           alert('网络错误: ' + err.message);
         } finally {
           btn.disabled = false;
@@ -477,10 +538,80 @@
     setTimeout(() => el.hidden = true, 5000);
   }
 
+  // ── sub2api 配置 ──
+  async function loadSub2ApiConfig() {
+    try {
+      const headers = {};
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+      const resp = await fetch('/api/sub2api-config', { headers });
+      if (resp.ok) {
+        const cfg = await resp.json();
+        $('#sub2api-url').value = cfg.base_url || '';
+        $('#sub2api-email').value = cfg.admin_email || '';
+        $('#sub2api-pwd').value = cfg.admin_password || '';
+        $('#sub2api-auto').checked = !!cfg.enabled;
+      }
+    } catch {}
+  }
+
+  $('#sub2api-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const headers = { 'Content-Type': 'application/json' };
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    try {
+      const resp = await fetch('/api/sub2api-config', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          base_url: $('#sub2api-url').value.trim(),
+          admin_email: $('#sub2api-email').value.trim(),
+          admin_password: $('#sub2api-pwd').value,
+          enabled: $('#sub2api-auto').checked
+        })
+      });
+      const data = await resp.json();
+      showSub2ApiStatus(resp.ok ? '配置已保存' : ('保存失败: ' + (data.error || '未知错误')), resp.ok);
+    } catch (err) {
+      showSub2ApiStatus('网络错误: ' + err.message, false);
+    }
+  });
+
+  // sub2api 一键上传全部
+  $('#sub2api-upload-all-btn').addEventListener('click', async () => {
+    const btn = $('#sub2api-upload-all-btn');
+    btn.disabled = true;
+    btn.textContent = '上传中...';
+    const headers = { 'Content-Type': 'application/json' };
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    try {
+      const resp = await fetch('/api/upload-all-to-sub2api', { method: 'POST', headers });
+      const data = await resp.json();
+      if (resp.ok) {
+        showSub2ApiStatus(`上传完成: 成功 ${data.success} 个, 失败 ${data.failed} 个`, data.failed === 0);
+      } else {
+        showSub2ApiStatus('上传失败: ' + data.error, false);
+      }
+    } catch (err) {
+      showSub2ApiStatus('网络错误: ' + err.message, false);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '一键上传全部';
+    }
+  });
+
+  function showSub2ApiStatus(msg, ok) {
+    const el = $('#sub2api-status');
+    el.hidden = false;
+    el.textContent = msg;
+    el.className = 'cpa-status ' + (ok ? 'cpa-ok' : 'cpa-err');
+    setTimeout(() => el.hidden = true, 5000);
+  }
+
   checkAuth();
   connectWS();
   loadHistory();
   loadCpaConfig();
+  loadSub2ApiConfig();
 
   let codeSubmitTaskId = null;
 

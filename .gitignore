@@ -4,3 +4,4 @@ debug/
 .env
 *.log
 config/cpa.json
+config/sub2api.json

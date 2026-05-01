@@ -53,15 +53,26 @@ function saveCpaConfig(cfg) {
   fs.writeFileSync(CPA_CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf8');
 }
 
+// ── sub2api 上传配置 ──
+const SUB2API_CONFIG_PATH = path.join(__dirname, 'config', 'sub2api.json');
+function loadSub2ApiConfig() {
+  try { return JSON.parse(fs.readFileSync(SUB2API_CONFIG_PATH, 'utf8')); } catch { return null; }
+}
+function saveSub2ApiConfig(cfg) {
+  if (!fs.existsSync(path.join(__dirname, 'config'))) fs.mkdirSync(path.join(__dirname, 'config'), { recursive: true });
+  fs.writeFileSync(SUB2API_CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf8');
+}
+
 const taskManager = new TaskManager(config);
 
-// 注入自动上传回调到 taskManager 的完成流程
+  // 注入自动上传回调到 taskManager 的完成流程
 const origRunExtraction = taskManager._runExtraction.bind(taskManager);
 taskManager._runExtraction = async function(taskId, email, onLog, wsSend, isAborted) {
   await origRunExtraction(taskId, email, onLog, wsSend, isAborted);
   const task = this.tasks.get(taskId);
   if (task && task.status === 'completed' && task.filename) {
     await autoUploadToCpa(task.filename);
+    await autoUploadToSub2Api(task.filename);
   }
 };
 
@@ -314,6 +325,150 @@ async function uploadTokenToCpa(cpaConfig, tokenData, filename) {
     req.write(body);
     req.end();
   });
+}
+
+// ── sub2api 配置 CRUD ──
+app.get('/api/sub2api-config', (req, res) => {
+  const cfg = loadSub2ApiConfig();
+  res.json(cfg || { base_url: '', admin_email: '', admin_password: '', enabled: false });
+});
+
+app.post('/api/sub2api-config', (req, res) => {
+  const { base_url, admin_email, admin_password, enabled } = req.body;
+  const cfg = {
+    base_url: typeof base_url === 'string' ? base_url.replace(/\/+$/, '') : '',
+    admin_email: typeof admin_email === 'string' ? admin_email : '',
+    admin_password: typeof admin_password === 'string' ? admin_password : '',
+    enabled: !!enabled,
+  };
+  saveSub2ApiConfig(cfg);
+  res.json({ ok: true, config: cfg });
+});
+
+// ── sub2api 上传核心逻辑 ──
+async function uploadToSub2Api(sub2ApiConfig, tokenData) {
+  const http = require('http');
+  const https = require('https');
+  const { URL } = require('url');
+
+  // 1) 登录获取 JWT
+  const loginUrl = new URL('/api/v1/auth/login', sub2ApiConfig.base_url);
+  const loginBody = JSON.stringify({ email: sub2ApiConfig.admin_email, password: sub2ApiConfig.admin_password });
+
+  const doRequest = (url, opts, body) => new Promise((resolve, reject) => {
+    const transport = url.protocol === 'https:' ? https : http;
+    const req = transport.request(url, opts, (resp) => {
+      let data = '';
+      resp.on('data', chunk => data += chunk);
+      resp.on('end', () => resolve({ statusCode: resp.statusCode, body: data }));
+    });
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+
+  const loginResult = await doRequest(loginUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(loginBody) },
+  }, loginBody);
+
+  if (loginResult.statusCode !== 200) {
+    throw new Error(`sub2api 登录失败 ${loginResult.statusCode}: ${loginResult.body}`);
+  }
+
+  const loginData = JSON.parse(loginResult.body);
+  const jwt = loginData.data?.access_token;
+  if (!jwt) throw new Error('sub2api 登录返回无 token');
+
+  // 2) 创建账号
+  const accountUrl = new URL('/api/v1/admin/accounts', sub2ApiConfig.base_url);
+  const accountBody = JSON.stringify({
+    platform: 'openai',
+    type: 'oauth',
+    name: tokenData.email || 'extracted',
+    credentials: {
+      refresh_token: tokenData.refresh_token,
+      client_id: 'app_EMoamEEZ73f0CkXaXp7hrann',
+    },
+  });
+
+  const createResult = await doRequest(accountUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${jwt}`,
+      'Content-Length': Buffer.byteLength(accountBody),
+    },
+  }, accountBody);
+
+  if (createResult.statusCode >= 400) {
+    throw new Error(`sub2api 创建账号失败 ${createResult.statusCode}: ${createResult.body}`);
+  }
+
+  return { status: createResult.statusCode, body: createResult.body };
+}
+
+// ── 上传单个 token 到 sub2api ──
+app.post('/api/upload-to-sub2api', async (req, res) => {
+  const rawName = req.body.filename;
+  if (!rawName) return res.status(400).json({ error: '缺少文件名' });
+  const filename = path.basename(rawName);
+  const filepath = path.join(taskManager.outputDir, filename);
+  if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'Token 文件不存在' });
+
+  const cfg = loadSub2ApiConfig();
+  if (!cfg || !cfg.base_url || !cfg.admin_email || !cfg.admin_password) {
+    return res.status(400).json({ error: '请先配置 sub2api 地址和管理员账号' });
+  }
+
+  try {
+    const tokenData = JSON.parse(fs.readFileSync(filepath, 'utf8'));
+    const result = await uploadToSub2Api(cfg, tokenData);
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── 批量上传所有 token 到 sub2api ──
+app.post('/api/upload-all-to-sub2api', async (req, res) => {
+  const cfg = loadSub2ApiConfig();
+  if (!cfg || !cfg.base_url || !cfg.admin_email || !cfg.admin_password) {
+    return res.status(400).json({ error: '请先配置 sub2api 地址和管理员账号' });
+  }
+
+  const files = fs.readdirSync(taskManager.outputDir).filter(f => (f.startsWith('codex-') || f.startsWith('token_')) && f.endsWith('.json'));
+  const results = { success: 0, failed: 0, details: [] };
+
+  for (const f of files) {
+    try {
+      const tokenData = JSON.parse(fs.readFileSync(path.join(taskManager.outputDir, f), 'utf8'));
+      await uploadToSub2Api(cfg, tokenData);
+      results.success++;
+      results.details.push({ file: f, status: 'ok' });
+    } catch (err) {
+      results.failed++;
+      results.details.push({ file: f, status: 'error', error: err.message });
+    }
+  }
+  res.json({ ok: true, ...results });
+});
+
+// ── 提取完成后自动上传 sub2api ──
+async function autoUploadToSub2Api(filename) {
+  const cfg = loadSub2ApiConfig();
+  if (!cfg || !cfg.enabled || !cfg.base_url || !cfg.admin_email || !cfg.admin_password) return;
+
+  const filepath = path.join(taskManager.outputDir, filename);
+  if (!fs.existsSync(filepath)) return;
+
+  try {
+    const tokenData = JSON.parse(fs.readFileSync(filepath, 'utf8'));
+    await uploadToSub2Api(cfg, tokenData);
+    broadcastToClients({ type: 'log', source: 'sub2api', message: `[sub2api] ${filename} 自动上传成功` });
+  } catch (err) {
+    broadcastToClients({ type: 'log', source: 'sub2api', message: `[sub2api] 自动上传失败: ${err.message}` });
+  }
 }
 
 wss.on('connection', (ws) => {

@@ -275,6 +275,10 @@ header h1 {
 .btn-cpa:hover { background: #4f46e5; }
 .btn-cpa:disabled { opacity: 0.5; cursor: not-allowed; }
 
+.btn-sub2api { background: #f59e0b; }
+.btn-sub2api:hover { background: #d97706; }
+.btn-sub2api:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .cpa-toggle-row {
   display: flex;
   align-items: center;
