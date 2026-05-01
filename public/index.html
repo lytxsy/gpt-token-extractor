@@ -13,7 +13,7 @@
       <p class="subtitle">输入 OpenAI 账号凭据，自动提取 Codex OAuth Token</p>
     </header>
 
-    <div id="login-overlay" class="overlay" hidden>
+    <div id="login-overlay" class="overlay" style="display:none">
       <div class="box">
         <h2>登录</h2>
         <form id="login-form">
@@ -67,7 +67,7 @@
         <button id="copy-json-btn" class="btn-primary">复制 JSON</button>
         <a id="download-btn" class="btn-secondary" download>下载 JSON</a>
         <button id="upload-cpa-btn" class="btn-primary btn-cpa">上传到 CPA</button>
-        <button id="download-all-btn" class="btn-secondary">下载全部 Token</button>
+        <button id="delete-btn" class="btn-danger">删除凭证</button>
       </div>
       <pre id="json-preview" class="json-preview"></pre>
     </section>
@@ -88,7 +88,7 @@
         </div>
         <div class="form-group">
           <label for="cpa-key">Management Key</label>
-          <input type="text" id="cpa-key" placeholder="Bearer Token / Management Key">
+          <input type="text" id="cpa-key" placeholder="只需填 Key，不需要 Bearer 前缀">
         </div>
         <div class="form-group cpa-toggle-row">
           <label class="toggle-label">

@@ -53,6 +53,17 @@ function saveCpaConfig(cfg) {
 }
 
 const taskManager = new TaskManager(config);
+
+// 注入自动上传回调到 taskManager 的完成流程
+const origRunExtraction = taskManager._runExtraction.bind(taskManager);
+taskManager._runExtraction = async function(taskId, email, onLog, wsSend, isAborted) {
+  await origRunExtraction(taskId, email, onLog, wsSend, isAborted);
+  const task = this.tasks.get(taskId);
+  if (task && task.status === 'completed' && task.filename) {
+    await autoUploadToCpa(task.filename);
+  }
+};
+
 const wsClients = new Set();
 
 function broadcastToClients(msg) {
@@ -120,7 +131,8 @@ app.get('/api/task/:taskId', (req, res) => {
 });
 
 app.get('/api/download/:filename', (req, res) => {
-  const filepath = path.join(taskManager.outputDir, req.params.filename);
+  const filename = path.basename(req.params.filename);
+  const filepath = path.join(taskManager.outputDir, filename);
   if (!fs.existsSync(filepath)) return res.status(404).json({ error: '文件不存在' });
   res.download(filepath);
 });
@@ -134,6 +146,36 @@ app.get('/api/download-all', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Content-Disposition', 'attachment; filename="all_tokens.json"');
   res.send(JSON.stringify(all, null, 2));
+});
+
+// ── 删除本地 token 文件 ──
+app.post('/api/delete/:filename', (req, res) => {
+  const filename = path.basename(req.params.filename);
+  const filepath = path.join(taskManager.outputDir, filename);
+  if (!fs.existsSync(filepath)) return res.status(404).json({ error: '文件不存在' });
+  try {
+    fs.unlinkSync(filepath);
+    // 清理内存中对应任务记录
+    for (const [id, task] of taskManager.tasks) {
+      if (task.filename === filename) {
+        task.filename = null;
+        task.status = 'deleted';
+      }
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: '删除失败: ' + err.message });
+  }
+});
+
+// ── 删除全部本地 token 文件 ──
+app.post('/api/delete-all', (req, res) => {
+  const files = fs.readdirSync(taskManager.outputDir).filter(f => (f.startsWith('codex-') || f.startsWith('token_')) && f.endsWith('.json'));
+  let deleted = 0;
+  for (const f of files) {
+    try { fs.unlinkSync(path.join(taskManager.outputDir, f)); deleted++; } catch {}
+  }
+  res.json({ ok: true, deleted });
 });
 
 // ── CPA 配置 CRUD ──
@@ -155,9 +197,9 @@ app.post('/api/cpa-config', (req, res) => {
 
 // ── 上传单个 token 到 CPA ──
 app.post('/api/upload-to-cpa', async (req, res) => {
-  const { filename } = req.body;
-  if (!filename) return res.status(400).json({ error: '缺少文件名' });
-
+  const rawName = req.body.filename;
+  if (!rawName) return res.status(400).json({ error: '缺少文件名' });
+  const filename = path.basename(rawName);
   const filepath = path.join(taskManager.outputDir, filename);
   if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'Token 文件不存在' });
 

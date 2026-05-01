@@ -48,6 +48,8 @@
         authToken = data.token;
         localStorage.setItem('auth_token', authToken);
         loginOverlay.style.display = 'none';
+        loadHistory();
+        loadCpaConfig();
       } else {
         loginError.hidden = false;
         loginError.textContent = '密码错误';
@@ -229,8 +231,29 @@
     }
   });
 
-  $('#download-all-btn').addEventListener('click', () => {
+  $('#download-all-btn')?.addEventListener('click', () => {
     window.location.href = '/api/download-all';
+  });
+
+  // ── 删除当前凭证 ──
+  $('#delete-btn').addEventListener('click', async () => {
+    if (!currentFilename) return alert('没有可删除的文件');
+    if (!confirm(`确定删除 ${currentFilename}？此操作不可恢复。`)) return;
+    const headers = { 'Content-Type': 'application/json' };
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    try {
+      const resp = await fetch('/api/delete/' + encodeURIComponent(currentFilename), { method: 'POST', headers });
+      if (resp.ok) {
+        resultSection.hidden = true;
+        currentFilename = null;
+        loadHistory();
+      } else {
+        const data = await resp.json();
+        alert('删除失败: ' + data.error);
+      }
+    } catch (err) {
+      alert('网络错误: ' + err.message);
+    }
   });
 
   $('#stop-btn').addEventListener('click', async () => {
@@ -269,9 +292,12 @@
       <div class="history-item">
         <span class="email">${escapeHtml(t.email)}</span>
         <span class="time">${new Date(t.createdAt).toLocaleString()}</span>
-        <span class="status ${t.status}">${t.status === 'completed' ? '成功' : t.status === 'running' ? '进行中' : '失败'}</span>
-        ${t.filename ? `<a href="/api/download/${encodeURIComponent(t.filename)}" class="btn-secondary" style="padding:4px 10px;font-size:0.75rem" download>下载</a>` : ''}
-        ${t.filename && t.status === 'completed' ? `<button class="btn-secondary btn-cpa-small" data-filename="${escapeHtml(t.filename)}" style="padding:4px 10px;font-size:0.75rem">上传CPA</button>` : ''}
+        <span class="status ${t.status}">${t.status === 'completed' ? '成功' : t.status === 'deleted' ? '已删除' : t.status === 'running' ? '进行中' : '失败'}</span>
+        ${t.filename && t.status !== 'deleted' ? `<span class="history-actions">
+          <a href="/api/download/${encodeURIComponent(t.filename)}" class="btn-secondary" style="padding:4px 10px;font-size:0.75rem" download>下载</a>
+          <button class="btn-secondary btn-cpa-small" data-filename="${escapeHtml(t.filename)}" style="padding:4px 10px;font-size:0.75rem">上传CPA</button>
+          <button class="btn-secondary btn-delete-small" data-filename="${escapeHtml(t.filename)}" style="padding:4px 10px;font-size:0.75rem;color:#ef4444">删除</button>
+        </span>` : ''}
       </div>
     `).join('');
 
@@ -300,6 +326,34 @@
           btn.textContent = '上传CPA';
           alert('网络错误: ' + err.message);
         } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+
+    // 为历史记录中的删除按钮绑定事件
+    historyList.querySelectorAll('.btn-delete-small').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const filename = btn.dataset.filename;
+        if (!confirm(`确定删除 ${filename}？此操作不可恢复。`)) return;
+        btn.disabled = true;
+        const headers = { 'Content-Type': 'application/json' };
+        if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+        try {
+          const resp = await fetch('/api/delete/' + encodeURIComponent(filename), { method: 'POST', headers });
+          if (resp.ok) {
+            if (currentFilename === filename) {
+              resultSection.hidden = true;
+              currentFilename = null;
+            }
+            loadHistory();
+          } else {
+            const data = await resp.json();
+            alert('删除失败: ' + data.error);
+            btn.disabled = false;
+          }
+        } catch (err) {
+          alert('网络错误: ' + err.message);
           btn.disabled = false;
         }
       });
