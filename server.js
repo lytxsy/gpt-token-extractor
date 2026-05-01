@@ -36,6 +36,7 @@ config.oauthRedirectPort = parseInt(process.env.OAUTH_REDIRECT_PORT, 10) || conf
 config.mailApiBase = process.env.MAIL_API_BASE || config.mailApiBase;
 config.mailAdminKey = process.env.MAIL_ADMIN_KEY || config.mailAdminKey;
 config.inboxProxyUrl = process.env.INBOX_PROXY_URL || config.inboxProxyUrl || '';
+config.proxy = process.env.PROXY || config.proxy || '';
 if (process.env.AUTO_MAIL_DOMAINS) {
   config.autoMailDomains = process.env.AUTO_MAIL_DOMAINS.split(',').map(s => s.trim()).filter(Boolean);
 } else {
