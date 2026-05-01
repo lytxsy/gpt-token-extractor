@@ -2,7 +2,7 @@
 
 自动化提取 OpenAI / Codex OAuth Token 的 Web 工具。
 
-输入 OpenAI 邮箱，自动完成验证码登录，提取 OAuth access_token / refresh_token，输出为可直接导入 CPA 的 JSON 凭证文件。支持一键上传到 CPA 后端。
+输入 OpenAI 邮箱，自动完成验证码登录，提取 OAuth access_token / refresh_token，输出为可直接导入 CPA 的 JSON 凭证文件。支持一键上传到 CPA 和 sub2api 后端。
 
 ## 功能
 
@@ -10,6 +10,8 @@
 - **自动邮箱轮询** — 配置邮件 API 后，自动获取验证码
 - **手动输入验证码** — 使用外部邮箱时，弹窗提示输入验证码
 - **CPA 一键上传** — 提取后直接上传到你的 CPA 后端，支持自动上传
+- **sub2api 一键上传** — 提取后直接上传到你的 sub2api 实例，支持自动上传
+- **复制 RT** — 一键复制 refresh_token，给 sub2api 等工具使用
 - **凭证管理** — 下载、上传、删除，操作完即删不留痕迹
 - **代理支持** — 服务器 IP 被 OpenAI 限制时可配置代理
 - **反爬检测绕过** — Puppeteer-extra + Stealth 插件
@@ -107,6 +109,14 @@ PROXY=socks5://127.0.0.1:7890
 - **CPA 后端地址** — 你的 CPA 实例地址
 - **Management Key** — CPA 管理密钥（不需要 Bearer 前缀）
 - **提取后自动上传** — 勾选后每次提取完成自动上传到 CPA
+
+### sub2api 上传配置
+
+在页面底部的「sub2api 上传配置」中填入：
+- **sub2api 地址** — 你的 sub2api 实例地址（如 `http://127.0.0.1:8080`）
+- **管理员邮箱** — sub2api 管理员账号
+- **管理员密码** — sub2api 管理员密码
+- **提取后自动上传** — 勾选后每次提取完成自动上传到 sub2api
 
 ## 输出格式
 
