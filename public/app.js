@@ -50,6 +50,7 @@
         loginOverlay.style.display = 'none';
         loadHistory();
         loadCpaConfig();
+        loadSub2ApiConfig();
       } else {
         loginError.hidden = false;
         loginError.textContent = '密码错误';
@@ -470,8 +471,8 @@
     }
   });
 
-  // 测试连接
-  $('#cpa-test-btn').addEventListener('click', async () => {
+  // 测试连接（按钮可能不存在，安全跳过）
+  $('#cpa-test-btn')?.addEventListener('click', async () => {
     const btn = $('#cpa-test-btn');
     btn.disabled = true;
     btn.textContent = '测试中...';
