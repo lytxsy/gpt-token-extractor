@@ -185,12 +185,25 @@
   function showResult(result, filename) {
     resultSection.hidden = false;
     currentFilename = filename;
+    currentResult = result;
     $('#result-email').textContent = '邮箱: ' + result.email;
     $('#result-account').textContent = 'Account: ' + (result.account_id || 'N/A').substring(0, 16) + '...';
     $('#json-preview').textContent = JSON.stringify(result, null, 2);
     $('#download-btn').href = '/api/download/' + encodeURIComponent(filename);
     $('#download-btn').download = filename;
   }
+
+  let currentResult = null;
+
+  $('#copy-rt-btn').addEventListener('click', () => {
+    const rt = currentResult?.refresh_token;
+    if (!rt) return alert('没有 refresh_token');
+    navigator.clipboard.writeText(rt).then(() => {
+      const btn = $('#copy-rt-btn');
+      btn.textContent = '已复制';
+      setTimeout(() => btn.textContent = '复制 RT', 1500);
+    });
+  });
 
   $('#copy-json-btn').addEventListener('click', () => {
     const text = $('#json-preview').textContent;
