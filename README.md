@@ -114,9 +114,12 @@ PROXY=socks5://127.0.0.1:7890
 
 在页面底部的「sub2api 上传配置」中填入：
 - **sub2api 地址** — 你的 sub2api 实例地址（如 `http://127.0.0.1:8080`）
-- **管理员邮箱** — sub2api 管理员账号
-- **管理员密码** — sub2api 管理员密码
+- **认证方式** — 可选择管理员邮箱/密码，或 Admin API Key
+- **管理员邮箱 / 管理员密码** — 使用 sub2api 管理员账号登录后创建账号（原有方式）
+- **Admin API Key** — 使用 sub2api 后台生成的管理员 API Key，通过 `x-api-key` 请求头创建账号
 - **提取后自动上传** — 勾选后每次提取完成自动上传到 sub2api
+
+使用 Admin API Key 时，需要先在 sub2api 后台「设置」中生成管理员 API Key。上传时工具会调用 `POST /api/v1/admin/accounts`，用提取到的 `refresh_token` 自动创建 OpenAI OAuth 账号，并在页面日志中回显创建出的账号 ID、状态和认证方式。
 
 ## 输出格式
 

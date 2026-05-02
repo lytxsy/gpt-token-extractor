@@ -114,12 +114,29 @@
           <input type="url" id="sub2api-url" placeholder="http://127.0.0.1:8080">
         </div>
         <div class="form-group">
+          <label>认证方式</label>
+          <div class="sub2api-auth-options">
+            <label class="inline-option">
+              <input type="radio" name="sub2api-auth-mode" value="email_password" checked>
+              <span>管理员邮箱/密码</span>
+            </label>
+            <label class="inline-option">
+              <input type="radio" name="sub2api-auth-mode" value="admin_api_key">
+              <span>Admin API Key (x-api-key)</span>
+            </label>
+          </div>
+        </div>
+        <div class="form-group">
           <label for="sub2api-email">管理员邮箱</label>
           <input type="email" id="sub2api-email" placeholder="admin@sub2api.local">
         </div>
         <div class="form-group">
           <label for="sub2api-pwd">管理员密码</label>
           <input type="password" id="sub2api-pwd" placeholder="admin password">
+        </div>
+        <div class="form-group" id="sub2api-key-group" hidden>
+          <label for="sub2api-admin-key">Admin API Key <span class="optional">请求头 x-api-key</span></label>
+          <input type="password" id="sub2api-admin-key" placeholder="s2a_...">
         </div>
         <div class="form-group cpa-toggle-row">
           <label class="toggle-label">

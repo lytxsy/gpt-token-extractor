@@ -183,6 +183,17 @@
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
+  function formatSub2ApiUploadResult(data) {
+    const account = data?.account;
+    if (!account) return '';
+    const parts = [];
+    if (account.id !== null && account.id !== undefined) parts.push(`ID ${account.id}`);
+    if (account.name) parts.push(account.name);
+    if (account.status) parts.push(`状态 ${account.status}`);
+    if (data.auth_method) parts.push(`认证 ${data.auth_method === 'admin_api_key' ? 'x-api-key' : '邮箱/密码'}`);
+    return parts.length ? ` (${parts.join(' / ')})` : '';
+  }
+
   function showResult(result, filename) {
     resultSection.hidden = false;
     currentFilename = filename;
@@ -262,6 +273,7 @@
       const data = await resp.json();
       if (resp.ok) {
         btn.textContent = '已上传';
+        appendLog('sub2api', `创建账号成功${formatSub2ApiUploadResult(data)}`);
         setTimeout(() => btn.textContent = '上传到 sub2api', 2000);
       } else {
         alert('上传失败: ' + data.error);
@@ -393,6 +405,7 @@
           const data = await resp.json();
           if (resp.ok) {
             btn.textContent = '已上传';
+            appendLog('sub2api', `${filename} 创建账号成功${formatSub2ApiUploadResult(data)}`);
           } else {
             btn.textContent = '上传sub2api';
             alert('上传失败: ' + data.error);
@@ -540,6 +553,28 @@
   }
 
   // ── sub2api 配置 ──
+  function getSub2ApiAuthMode() {
+    return document.querySelector('input[name="sub2api-auth-mode"]:checked')?.value || 'email_password';
+  }
+
+  function setSub2ApiAuthMode(mode) {
+    const normalized = mode === 'admin_api_key' ? 'admin_api_key' : 'email_password';
+    const radio = document.querySelector(`input[name="sub2api-auth-mode"][value="${normalized}"]`);
+    if (radio) radio.checked = true;
+    updateSub2ApiAuthFields();
+  }
+
+  function updateSub2ApiAuthFields() {
+    const useAdminApiKey = getSub2ApiAuthMode() === 'admin_api_key';
+    $('#sub2api-email').closest('.form-group').hidden = useAdminApiKey;
+    $('#sub2api-pwd').closest('.form-group').hidden = useAdminApiKey;
+    $('#sub2api-key-group').hidden = !useAdminApiKey;
+  }
+
+  document.querySelectorAll('input[name="sub2api-auth-mode"]').forEach(input => {
+    input.addEventListener('change', updateSub2ApiAuthFields);
+  });
+
   async function loadSub2ApiConfig() {
     try {
       const headers = {};
@@ -548,8 +583,10 @@
       if (resp.ok) {
         const cfg = await resp.json();
         $('#sub2api-url').value = cfg.base_url || '';
+        setSub2ApiAuthMode(cfg.auth_mode || 'email_password');
         $('#sub2api-email').value = cfg.admin_email || '';
         $('#sub2api-pwd').value = cfg.admin_password || '';
+        $('#sub2api-admin-key').value = cfg.admin_api_key || '';
         $('#sub2api-auto').checked = !!cfg.enabled;
       }
     } catch {}
@@ -565,8 +602,10 @@
         headers,
         body: JSON.stringify({
           base_url: $('#sub2api-url').value.trim(),
+          auth_mode: getSub2ApiAuthMode(),
           admin_email: $('#sub2api-email').value.trim(),
           admin_password: $('#sub2api-pwd').value,
+          admin_api_key: $('#sub2api-admin-key').value.trim(),
           enabled: $('#sub2api-auto').checked
         })
       });
@@ -588,7 +627,9 @@
       const resp = await fetch('/api/upload-all-to-sub2api', { method: 'POST', headers });
       const data = await resp.json();
       if (resp.ok) {
-        showSub2ApiStatus(`上传完成: 成功 ${data.success} 个, 失败 ${data.failed} 个`, data.failed === 0);
+        const authMethods = [...new Set((data.details || []).filter(d => d.auth_method).map(d => d.auth_method === 'admin_api_key' ? 'x-api-key' : '邮箱/密码'))];
+        const suffix = authMethods.length ? `，认证: ${authMethods.join(', ')}` : '';
+        showSub2ApiStatus(`上传完成: 成功 ${data.success} 个, 失败 ${data.failed} 个${suffix}`, data.failed === 0);
       } else {
         showSub2ApiStatus('上传失败: ' + data.error, false);
       }
@@ -607,6 +648,8 @@
     el.className = 'cpa-status ' + (ok ? 'cpa-ok' : 'cpa-err');
     setTimeout(() => el.hidden = true, 5000);
   }
+
+  updateSub2ApiAuthFields();
 
   checkAuth();
   connectWS();

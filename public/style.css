@@ -88,6 +88,29 @@ header h1 {
 .required { color: var(--danger); }
 .optional { color: var(--text-dim); font-weight: normal; font-size: 0.8rem; }
 
+.sub2api-auth-options {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.inline-option {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.inline-option input {
+  width: auto;
+  margin: 0;
+}
+
 .btn-primary, .btn-secondary, .btn-danger {
   display: inline-block;
   padding: 10px 20px;
