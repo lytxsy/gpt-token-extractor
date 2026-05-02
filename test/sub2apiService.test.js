@@ -125,6 +125,38 @@ test('uploadToSub2Api uses x-api-key and creates account from refresh token', as
   });
 });
 
+test('uploadToSub2Api allows explicit account name for manual refresh token upload', async () => {
+  await withMockSub2Api((record, res) => {
+    assert.equal(record.url, '/api/v1/admin/accounts');
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      data: {
+        id: 321,
+        name: record.json.name,
+        platform: 'openai',
+        type: 'oauth',
+        status: 'active',
+      },
+    }));
+  }, async (baseUrl, requests) => {
+    const result = await uploadToSub2Api({
+      base_url: baseUrl,
+      auth_mode: 'admin_api_key',
+      admin_api_key: 's2a_test_key',
+    }, {
+      email: 'manual@example.com',
+      refresh_token: 'rt_manual',
+    }, {
+      name: 'Manual OpenAI Account',
+    });
+
+    assert.equal(requests[0].json.name, 'Manual OpenAI Account');
+    assert.equal(requests[0].json.credentials.refresh_token, 'rt_manual');
+    assert.equal(result.account.name, 'Manual OpenAI Account');
+    assert.equal(result.account.email, 'manual@example.com');
+  });
+});
+
 test('uploadToSub2Api preserves email/password login flow', async () => {
   await withMockSub2Api((record, res) => {
     if (record.url === '/api/v1/auth/login') {

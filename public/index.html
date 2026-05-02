@@ -149,6 +149,26 @@
           <button type="button" id="sub2api-upload-all-btn" class="btn-secondary btn-sub2api">一键上传全部</button>
         </div>
       </form>
+      <div class="manual-token-panel">
+        <h3>直接上传 refresh token</h3>
+        <form id="sub2api-refresh-token-form">
+          <div class="form-group">
+            <label for="sub2api-rt">Refresh Token <span class="required">*</span></label>
+            <textarea id="sub2api-rt" rows="4" placeholder="rt_..." spellcheck="false"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="sub2api-manual-email">邮箱 <span class="optional">可选，用于回显</span></label>
+            <input type="email" id="sub2api-manual-email" placeholder="user@example.com">
+          </div>
+          <div class="form-group">
+            <label for="sub2api-manual-name">账号名称 <span class="optional">可选，默认使用邮箱或 extracted</span></label>
+            <input type="text" id="sub2api-manual-name" placeholder="OpenAI account name">
+          </div>
+          <div class="cpa-actions">
+            <button type="submit" id="sub2api-upload-rt-btn" class="btn-primary btn-sub2api">上传 refresh token</button>
+          </div>
+        </form>
+      </div>
       <div id="sub2api-status" class="cpa-status" hidden></div>
     </section>
   </div>

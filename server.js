@@ -366,6 +366,31 @@ app.post('/api/upload-to-sub2api', async (req, res) => {
   }
 });
 
+// ── 直接提交 refresh_token 到 sub2api ──
+app.post('/api/upload-refresh-token-to-sub2api', async (req, res) => {
+  const refreshToken = typeof req.body.refresh_token === 'string' ? req.body.refresh_token.trim() : '';
+  const email = typeof req.body.email === 'string' ? req.body.email.trim() : '';
+  const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
+  if (!refreshToken) return res.status(400).json({ error: 'refresh_token 必填' });
+
+  const cfg = loadSub2ApiConfig();
+  if (!isSub2ApiConfigReady(cfg)) {
+    return res.status(400).json({ error: missingSub2ApiConfigMessage(cfg) });
+  }
+
+  try {
+    const result = await uploadToSub2Api(cfg, {
+      refresh_token: refreshToken,
+      email: email || undefined,
+    }, {
+      name: name || email || undefined,
+    });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── 批量上传所有 token 到 sub2api ──
 app.post('/api/upload-all-to-sub2api', async (req, res) => {
   const cfg = loadSub2ApiConfig();

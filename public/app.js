@@ -616,6 +616,48 @@
     }
   });
 
+  $('#sub2api-refresh-token-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const refreshToken = $('#sub2api-rt').value.trim();
+    const email = $('#sub2api-manual-email').value.trim();
+    const name = $('#sub2api-manual-name').value.trim();
+    if (!refreshToken) {
+      showSub2ApiStatus('refresh_token 必填', false);
+      return;
+    }
+
+    const btn = $('#sub2api-upload-rt-btn');
+    btn.disabled = true;
+    btn.textContent = '上传中...';
+    const headers = { 'Content-Type': 'application/json' };
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    try {
+      const resp = await fetch('/api/upload-refresh-token-to-sub2api', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          refresh_token: refreshToken,
+          email,
+          name,
+        })
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        const summary = `refresh token 上传成功${formatSub2ApiUploadResult(data)}`;
+        showSub2ApiStatus(summary, true);
+        appendLog('sub2api', summary);
+        $('#sub2api-rt').value = '';
+      } else {
+        showSub2ApiStatus('上传失败: ' + (data.error || '未知错误'), false);
+      }
+    } catch (err) {
+      showSub2ApiStatus('网络错误: ' + err.message, false);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '上传 refresh token';
+    }
+  });
+
   // sub2api 一键上传全部
   $('#sub2api-upload-all-btn').addEventListener('click', async () => {
     const btn = $('#sub2api-upload-all-btn');

@@ -81,7 +81,23 @@ header h1 {
   transition: border-color 0.2s;
 }
 
-.form-group input:focus {
+.form-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.95rem;
+  outline: none;
+  resize: vertical;
+  min-height: 96px;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
   border-color: var(--accent);
 }
 
@@ -109,6 +125,18 @@ header h1 {
 .inline-option input {
   width: auto;
   margin: 0;
+}
+
+.manual-token-panel {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.manual-token-panel h3 {
+  font-size: 0.95rem;
+  margin-bottom: 12px;
+  color: var(--text);
 }
 
 .btn-primary, .btn-secondary, .btn-danger {
