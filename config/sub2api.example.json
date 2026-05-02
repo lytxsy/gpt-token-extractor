@@ -1,0 +1,8 @@
+{
+  "base_url": "http://127.0.0.1:8080",
+  "auth_mode": "admin_api_key",
+  "admin_email": "",
+  "admin_password": "",
+  "admin_api_key": "your-admin-api-key",
+  "enabled": false
+}

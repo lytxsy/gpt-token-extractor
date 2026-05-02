@@ -121,6 +121,19 @@ PROXY=socks5://127.0.0.1:7890
 
 使用 Admin API Key 时，需要先在 sub2api 后台「设置」中生成管理员 API Key。上传时工具会调用 `POST /api/v1/admin/accounts`，用提取到的 `refresh_token` 自动创建 OpenAI OAuth 账号，并在页面日志中回显创建出的账号 ID、状态和认证方式。
 
+配置会保存到本地 `config/sub2api.json`（该文件不会提交）。可参考 `config/sub2api.example.json`：
+
+```json
+{
+  "base_url": "http://127.0.0.1:8080",
+  "auth_mode": "admin_api_key",
+  "admin_email": "",
+  "admin_password": "",
+  "admin_api_key": "your-admin-api-key",
+  "enabled": false
+}
+```
+
 ## 输出格式
 
 凭证文件命名格式：`codex-{邮箱}-plus.json`
