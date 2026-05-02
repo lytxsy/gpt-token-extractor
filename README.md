@@ -121,7 +121,7 @@ PROXY=socks5://127.0.0.1:7890
 
 使用 Admin API Key 时，需要先在 sub2api 后台「设置」中生成管理员 API Key。上传时工具会调用 `POST /api/v1/admin/accounts`，用提取到的 `refresh_token` 自动创建 OpenAI OAuth 账号，并在页面日志中回显创建出的账号 ID、状态和认证方式。
 
-如果已经有 `refresh_token`，也可以不执行提取流程，直接在「直接上传 refresh token」区域粘贴 token 并提交。邮箱和账号名称为可选字段，仅用于创建账号时命名和页面回显；`refresh_token` 不会保存到本地配置文件。
+如果已经有 `refresh_token`，也可以不执行提取流程，直接在「直接上传 refresh token」区域粘贴 token 并提交。邮箱和账号名称为可选字段，仅用于创建账号时命名和页面回显；如果两者都为空，会自动生成 `manual-rt-YYYYMMDD-HHMMSS-xxxxxx` 格式的账号名，避免重复。`refresh_token` 不会保存到本地配置文件。
 
 配置会保存到本地 `config/sub2api.json`（该文件不会提交）。可参考 `config/sub2api.example.json`：
 

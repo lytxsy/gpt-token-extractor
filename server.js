@@ -383,13 +383,28 @@ app.post('/api/upload-refresh-token-to-sub2api', async (req, res) => {
       refresh_token: refreshToken,
       email: email || undefined,
     }, {
-      name: name || email || undefined,
+      name: name || email || generateManualSub2ApiAccountName(),
     });
     res.json({ ok: true, ...result });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
+function generateManualSub2ApiAccountName() {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const timestamp = [
+    now.getUTCFullYear(),
+    pad(now.getUTCMonth() + 1),
+    pad(now.getUTCDate()),
+    '-',
+    pad(now.getUTCHours()),
+    pad(now.getUTCMinutes()),
+    pad(now.getUTCSeconds()),
+  ].join('');
+  return `manual-rt-${timestamp}-${crypto.randomBytes(3).toString('hex')}`;
+}
 
 // ── 批量上传所有 token 到 sub2api ──
 app.post('/api/upload-all-to-sub2api', async (req, res) => {
@@ -447,6 +462,14 @@ wss.on('connection', (ws) => {
 });
 
 const PORT = parseInt(process.env.PORT, 10) || 8090;
-server.listen(PORT, () => {
-  console.log(`GPT Token Extractor running on http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log(`GPT Token Extractor running on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = {
+  app,
+  server,
+  generateManualSub2ApiAccountName,
+};

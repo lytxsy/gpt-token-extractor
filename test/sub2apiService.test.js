@@ -1,6 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const {
   OPENAI_CODEX_CLIENT_ID,
@@ -9,6 +11,8 @@ const {
   missingSub2ApiConfigMessage,
   uploadToSub2Api,
 } = require('../lib/sub2apiService');
+
+const sub2apiConfigPath = path.join(__dirname, '..', 'config', 'sub2api.json');
 
 async function withMockSub2Api(handler, run) {
   const requests = [];
@@ -214,5 +218,59 @@ test('uploadToSub2Api fails early when token file has no refresh_token', async (
       /缺少 refresh_token/,
     );
     assert.equal(requests.length, 0);
+  });
+});
+
+test('manual refresh-token route generates a unique default account name', async () => {
+  const originalConfig = fs.existsSync(sub2apiConfigPath)
+    ? fs.readFileSync(sub2apiConfigPath, 'utf8')
+    : null;
+
+  await withMockSub2Api((record, res) => {
+    assert.equal(record.url, '/api/v1/admin/accounts');
+    assert.match(record.json.name, /^manual-rt-\d{8}-\d{6}-[0-9a-f]{6}$/);
+    assert.equal(record.json.credentials.refresh_token, 'rt_route');
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      data: {
+        id: 654,
+        name: record.json.name,
+        platform: 'openai',
+        type: 'oauth',
+        status: 'active',
+      },
+    }));
+  }, async (baseUrl) => {
+    try {
+      fs.writeFileSync(sub2apiConfigPath, JSON.stringify({
+        base_url: baseUrl,
+        auth_mode: 'admin_api_key',
+        admin_api_key: 's2a_route',
+        enabled: false,
+      }, null, 2));
+
+      const { server } = require('../server');
+      await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+      const { port } = server.address();
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}/api/upload-refresh-token-to-sub2api`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: 'rt_route' }),
+        });
+        const body = await response.json();
+        assert.equal(response.status, 200);
+        assert.equal(body.ok, true);
+        assert.match(body.account.name, /^manual-rt-\d{8}-\d{6}-[0-9a-f]{6}$/);
+      } finally {
+        await new Promise(resolve => server.close(resolve));
+      }
+    } finally {
+      if (originalConfig === null) {
+        fs.rmSync(sub2apiConfigPath, { force: true });
+      } else {
+        fs.writeFileSync(sub2apiConfigPath, originalConfig);
+      }
+    }
   });
 });
